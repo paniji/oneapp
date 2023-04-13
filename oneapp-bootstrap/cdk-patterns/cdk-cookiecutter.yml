@@ -1,0 +1,653 @@
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Product Information"
+        Parameters:
+          - pRuntime
+          - pRuntimeVersion
+          - pRepositoryName
+          - pMainBranchName
+          - pTestBranchName
+      - Label:
+          default: "Pipelines Configuration"
+        Parameters:
+          - pRepoS3Bucket
+
+    # ParameterLabels:
+    #   pRepositoryName:
+    #     default: "Repository Name"
+    #   pRuntime:
+    #     default: "Runtime"
+    #   pRuntimeVersion:
+    #     default: "RuntimeVersion"
+
+Parameters:
+  pRuntime:
+    Description: CDK Runtime
+    Type: String
+    AllowedValues:
+      - "python"
+      # - "typescript"
+      # - "javascript"
+      # - "java"
+      # - "csharp"
+    Default: "python"
+  pRuntimeVersion:
+    Description: CDK Runtime Version
+    Type: String
+    Default: "2.14.0"
+  pRepositoryName:
+    Description: CodeCommit repository name
+    Type: String
+    Default: pm-
+  pMainBranchName:
+    Type: String
+    Description: Main Branch name
+    Default: main
+  pTestBranchName:
+    Type: String
+    Description: (Optional) Development Branch name. If different from  Main Branch name, this will deploy a seperate Dev pipeline
+    Default: main
+
+  pRepoS3Bucket:
+    Description: Artifact bucket
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/bootstrap/oneapp/ArtifactBucketName'
+
+  pArtifactBucket:
+    Description: Artifact bucket
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/bootstrap/oneapp/DeleteArtifactBucketName'
+
+  pCodePipelineServiceRole:
+    Description: CodePipeline Service Role Arn
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/bootstrap/oneapp/CodePipelineServiceRoleArn'
+
+  pCodeBuildImage:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Code Build Image Version
+    Default: '/bootstrap/oneapp/CodeBuildImageVersion'
+
+  pCodeBuildJava:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Code Build Java
+    Default: '/bootstrap/oneapp/CodeBuildJavaVersion'
+
+  # pCodeBuildImage:
+  #   Type: String
+  #   Description: Code Build Image
+  #   Default: aws/codebuild/standard:6.0 # aws/codebuild/standard:5.0
+
+  # pCodeBuildJava:
+  #   Type: String
+  #   Description: Code Build Java
+  #   Default: corretto17 # corretto11
+ ### Parameter Store
+  # pSharedEnvironment:
+  #   Type: AWS::SSM::Parameter::Value<String>
+  #   Default: '/accounts/SharedServices/name'
+  # pSharedDeplAccountNumber:
+  #   Type: AWS::SSM::Parameter::Value<String>
+  #   Default: '/accounts/SharedServices/Depl/id'
+  # pSharedProdAccountNumber:
+  #   Type: AWS::SSM::Parameter::Value<String>
+  #   Default: '/accounts/SharedServices/Prod/id'
+
+Conditions:
+  cProdRepo:
+    !Equals [!Ref pRepoS3Bucket, prod]
+  cTestRepo:
+    !Not [ !Equals  [!Ref pTestBranchName, !Ref pMainBranchName]]
+
+Resources:
+  rCodeCommit:
+    Type: AWS::CodeCommit::Repository
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    #Condition: cProdRepo
+    Properties:
+      RepositoryName: !Ref pRepositoryName
+      Code:
+        BranchName: !Ref pMainBranchName
+        S3: 
+          Bucket: !Ref pRepoS3Bucket
+          Key: cdk-template/repository-code.zip
+
+  rCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${AWS::StackName}-Build-Project
+      Description: CodeBuild Project for environment accounts to configure and deploy CDK
+      ServiceRole: !Ref pCodePipelineServiceRole
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref pCodeBuildImage
+        PrivilegedMode: false
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            install:
+              runtime-versions:
+                java: ${pCodeBuildJava}
+              commands:
+                - npm install -g aws-cdk@${pRuntimeVersion}
+                - cdk version
+                - python3 --version
+                - python3 -m venv .venv
+                - pip3 --version
+                - git version
+                - pip install git-remote-codecommit
+            build:
+              run-as: root
+              commands:
+                - ls -a
+                - cat files/app.py
+                - git clone codecommit::us-east-1://${pRepositoryName}
+                - mkdir ${pRepositoryName}-src
+                - cd ${pRepositoryName}-src
+                - cdk init app --language python
+                - cat app.py
+                - cat app.py | head -n 7 | tail -n 7 > temp_app.py
+                - cat temp_app.py
+                - py1=$(cat app.py | head -n 6 | tail -n 1)
+                - var10=$(python3 -c "import pprint; tt = '$py1'.split(); print(tt[3])")
+                - cat ../${pRepositoryName}/files/app.py | head -n 40 | tail -n 24 >> temp_app.py
+                - echo $var10
+                - sed -i.bak "s|PmCdkServerlessStack|$var10|g" temp_app.py
+                - cat temp_app.py
+                - cp -f temp_app.py app.py
+                - rm -f temp_app.py
+                - rm -f ../${pRepositoryName}/files/app.py
+                - cp -rf * ../${pRepositoryName}
+                - cd ..
+                - source .venv/bin/activate
+                - cp ${pRepositoryName}/files/.gitignore ${pRepositoryName}/
+                - cd ${pRepositoryName}
+                - ls -a
+                - python -m pip install -r requirements.txt
+                - cdk bootstrap --template files/bootstrap-template.yml 
+                - cdk ls
+                - git status
+                - git config --global user.email "pani-aws-codebuild@ap.com"
+                - git config --global user.name "AWS CodeBuild"
+                - git add .
+                - git commit -m "First CodeBuild Commit"
+                - git push
+          artifacts:
+            files:
+              - '**/*'
+            name: cdk-test-$AWS_REGION
+  rAmazonCloudWatchEventRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'codepipeline:StartPipelineExecution'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:codepipeline:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':'
+                    - !Ref rPipelineMain
+      #PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/pani-boundary
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}/CloudWatchEventRole
+  rAmazonCloudWatchEventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        resources:
+          - !Join 
+            - ''
+            - - 'arn:aws:codecommit:'
+              - !Ref 'AWS::Region'
+              - ':'
+              - !Ref 'AWS::AccountId'
+              - ':'
+              - !Ref pRepositoryName
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - !Ref pMainBranchName
+      Targets:
+        - Arn: !Join 
+            - ''
+            - - 'arn:aws:codepipeline:'
+              - !Ref 'AWS::Region'
+              - ':'
+              - !Ref 'AWS::AccountId'
+              - ':'
+              - !Ref rPipelineMain
+          RoleArn: !GetAtt 
+            - rAmazonCloudWatchEventRole
+            - Arn
+          Id: codepipeline-main
+  rAppPipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    DependsOn: rCodeCommit
+    Properties:
+      Name: !Sub ${AWS::StackName}-Build-Pipeline
+      RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineServiceRole
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BranchName: !Ref pMainBranchName
+                RepositoryName: !Ref pRepositoryName
+                PollForSourceChanges: false
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref rCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 2
+      ArtifactStore:
+        Type: S3
+        Location: !Ref pArtifactBucket
+
+      # ArtifactStores:
+      #   - Region: us-east-1
+      #     ArtifactStore:
+      #       Type: S3
+      #       Location: !Ref pRepoS3Bucket
+      #   - Region: us-west-2
+      #     ArtifactStore:
+      #       Type: S3
+      #       Location: !Ref pRepoS3Bucket
+
+  rProdCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: rAppPipeline
+    Properties:
+      Name: !Sub ${pRepositoryName}-Build-Project-${pMainBranchName}
+      Description: CodeBuild Project for environment accounts to configure and deploy CDK
+      ServiceRole: !Ref pCodePipelineServiceRole
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref pCodeBuildImage
+        PrivilegedMode: false
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            install:
+              runtime-versions:
+                java: ${pCodeBuildJava}
+              commands:
+                - npm install -g aws-cdk@${pRuntimeVersion}
+                - cdk version
+                - python3 --version
+                - python3 -m venv .venv
+                - pip3 --version
+                - git version
+                - pip install git-remote-codecommit
+            build:
+              run-as: root
+              commands:
+                - ls
+                - source .venv/bin/activate
+                - pip3 install -r requirements.txt
+                - cdk ls --context product_name=${pRepositoryName}
+                - cp files/zip_repo.sh .
+                - ls -l zip_repo.sh
+                - chmod +x zip_repo.sh
+                - ./zip_repo.sh
+                - aws s3 cp repository-code.zip s3://${pRepoS3Bucket}/${pRepositoryName}/${pRuntimeVersion}/Prod/ --no-progress
+                - ls
+          artifacts:
+            files:
+              - '**/*'
+            name: cdk-test-$AWS_REGION
+
+  rPipelineMain:
+    Type: 'AWS::CodePipeline::Pipeline'
+    DependsOn: rAppPipeline
+    Properties:
+      Name: !Sub ${pRepositoryName}-Pipeline-${pMainBranchName}
+      RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineServiceRole
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BranchName: !Ref pMainBranchName
+                RepositoryName: !Ref pRepositoryName
+                PollForSourceChanges: false
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref rProdCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildCICDOutput
+              RunOrder: 2
+      ArtifactStore:
+        Type: S3
+        Location: !Ref pArtifactBucket
+
+  ## Test
+
+  rLambdaServiceRole: # IAM Role: Cluster Role
+    Condition: cTestRepo
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyName: "lambda-role"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codecommit:*
+                Resource: 
+                  - !Sub arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${pRepositoryName}
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:*'
+                  - 's3:*'
+                  - 'logs:*'
+                Resource: '*'
+      #PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/pani-boundary
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}/LambdaServiceRole
+
+  rCustomCreateBranch:
+    Type: 'Custom::CreateBranch'
+    Condition: cTestRepo
+    Properties:
+      ServiceToken: !GetAtt rCreateBranch.Arn
+      RepositoryName: !Ref pRepositoryName
+      BranchName: !Ref pTestBranchName
+      MainBranchName: !Ref pMainBranchName
+    DependsOn: rCodeCommit
+
+  rCreateBranch:
+    Type: 'AWS::Lambda::Function'
+    Condition: cTestRepo
+    Properties:
+      Handler: "index.handler"
+      Role: !GetAtt 'rLambdaServiceRole.Arn'
+      Runtime: python3.7
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          client = boto3.client('codecommit')
+
+          def handler(event, context):
+            RepositoryName = event['ResourceProperties']['RepositoryName']
+            BranchName = event['ResourceProperties']['BranchName']
+            MainBranchName = event['ResourceProperties']['MainBranchName']
+
+            branch = client.get_branch(
+              repositoryName=RepositoryName,
+              branchName=MainBranchName
+            )
+
+            print(branch)
+            print(branch['branch']['commitId'])
+
+            response = client.create_branch(
+              repositoryName=RepositoryName,
+              branchName=BranchName,
+              commitId=branch['branch']['commitId']
+            )
+
+            response = client.update_default_branch(
+              repositoryName=RepositoryName,
+              defaultBranchName=BranchName
+            )
+
+            responseData = {}
+            responseData['Data'] = "SUCCESS"
+            physicalId = BranchName
+            cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                              responseData, physicalId)
+
+  rTestCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: rAppPipeline
+    Condition: cTestRepo
+    Properties:
+      Name: !Sub ${pRepositoryName}-Build-Project-${pTestBranchName}
+      Description: CodeBuild Project for environment accounts to configure and deploy CDK
+      ServiceRole: !Ref pCodePipelineServiceRole
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref pCodeBuildImage
+        PrivilegedMode: false
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            install:
+              runtime-versions:
+                java: ${pCodeBuildJava}
+              commands:
+                - npm install -g aws-cdk@${pRuntimeVersion}
+                - cdk version
+                - python3 --version
+                - python3 -m venv .venv
+                - pip3 --version
+                - git version
+                - pip install git-remote-codecommit
+            build:
+              run-as: root
+              commands:
+                - ls
+                - source .venv/bin/activate
+                - pip3 install -r requirements.txt
+                - cdk ls --context product_name=${pRepositoryName}
+                - cp files/zip_repo.sh .
+                - ls -l zip_repo.sh
+                - chmod +x zip_repo.sh
+                - ./zip_repo.sh
+                - aws s3 cp repository-code.zip s3://${pRepoS3Bucket}/${pRepositoryName}/${pRuntimeVersion}/Test/ --no-progress
+                - ls
+          artifacts:
+            files:
+              - '**/*'
+            name: cdk-test-$AWS_REGION
+  # Pipeline Test
+  rPipelineTest:
+    Type: 'AWS::CodePipeline::Pipeline'
+    DependsOn: [ rAppPipeline, rCustomCreateBranch ]
+    Condition: cTestRepo
+    Properties:
+      Name: !Sub ${pRepositoryName}-Pipeline-${pTestBranchName}
+      RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineServiceRole
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BranchName: !Ref pTestBranchName
+                RepositoryName: !Ref pRepositoryName
+                PollForSourceChanges: false
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref rTestCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutputTest
+              RunOrder: 2
+      ArtifactStore:
+        Type: S3
+        Location: !Ref pArtifactBucket
+  # CW Role
+  rAmazonCloudWatchEventRoleTest:
+    Type: 'AWS::IAM::Role'
+    Condition: cTestRepo
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'codepipeline:StartPipelineExecution'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:codepipeline:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':'
+                    - !Ref rPipelineTest
+      #PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/pani-boundary
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}/CloudWatchEventRoleTest
+  # CW Rule        
+  rAmazonCloudWatchEventRuleTest:
+    Condition: cTestRepo
+    Type: 'AWS::Events::Rule'
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        resources:
+          - !Join 
+            - ''
+            - - 'arn:aws:codecommit:'
+              - !Ref 'AWS::Region'
+              - ':'
+              - !Ref 'AWS::AccountId'
+              - ':'
+              - !Ref pRepositoryName
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - !Ref pTestBranchName
+      Targets:
+        - Arn: !Join 
+            - ''
+            - - 'arn:aws:codepipeline:'
+              - !Ref 'AWS::Region'
+              - ':'
+              - !Ref 'AWS::AccountId'
+              - ':'
+              - !Ref rPipelineTest
+          RoleArn: !GetAtt 
+            - rAmazonCloudWatchEventRoleTest
+            - Arn
+          Id: codepipeline-PipelineTest
