@@ -1,12 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Account Creation Tamplate
+Description: OneApp CDK Cookiecutter Deployment
 
 Parameters:
 
   pCDKS3Zip:
     Type: String
-    Description: CDK Project S3 URI location
-    Default: s3://artifact-oneapp-324278473885-us-east-1/pani-one-app/2.73.0/Test/repository-code.zip
+    Description: CDK Project S3 URI location (eg pani-one-app/2.73.0/Test/repository-code.zip)
 
   pRepoS3Bucket:
     Description: Artifact bucket
@@ -81,7 +80,7 @@ Resources:
               RunOrder: 2
       ArtifactStore:
         Type: S3
-        Location: !Ref pArtifactBucket
+        Location: !Ref pRepoS3Bucket
 
   rCodeCommit:
     Type: AWS::CodeCommit::Repository
@@ -94,7 +93,7 @@ Resources:
         BranchName: main
         S3: 
           Bucket: !Ref pRepoS3Bucket
-          Key: cdk-template/repository-code.zip
+          Key: !Ref pCDKS3Zip
            
   rCodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -121,7 +120,7 @@ Resources:
                 java: ${pCodeBuildJava}
               run-as: root
               commands:
-                - zip=${pCDKS3Zip}
+                - zip=s3://${pRepoS3Bucket}/${pCDKS3Zip}
                 - vsn=$(python3 -c "import pprint; tt = '$zip'.split('/'); print(tt[4])")
                 - echo $vsn
                 - npm install -g aws-cdk@$vsn
@@ -130,24 +129,26 @@ Resources:
             build:
               run-as: root
               commands:
-                - ls
+                - ls -a 
                 - aws sts get-caller-identity
+                - source .venv/bin/activate
 
                 - mkdir repository-code
-                - aws s3 cp ${pCDKS3Zip} repository-code.zip --no-progress
+                - aws s3 cp s3://${pRepoS3Bucket}/${pCDKS3Zip} repository-code.zip --no-progress
                 - unzip -qq repository-code.zip -d repository-code
-                - ls
+                - ls -a
 
                 - cd repository-code
-                - ls
+                - ls -a 
                 
                 ## SLS
-                - source .venv/bin/activate
+                #- source .venv/bin/activate CR#1
                 - pip3 install -r requirements.txt
                 - cdk bootstrap --template files/bootstrap-template.yml 
 
                 ## Create and Update Global Orchestration Roles Cfn in S3
-                - cdk synth
-                - cdk deploy
-
+                #- cdk synth
+                - cdk deploy --context product_name=${AWS::StackName}-deployment --require-approval never
+                - rm -rf .venv
+                - rm -rf cdk.out
       TimeoutInMinutes: 90

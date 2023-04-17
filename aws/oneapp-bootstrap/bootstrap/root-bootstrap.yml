@@ -26,6 +26,9 @@ Resources:
               Service:
                 - codepipeline.amazonaws.com
                 - codebuild.amazonaws.com
+                - cloudformation.amazonaws.com
+              AWS:
+                Ref: AWS::AccountId
             Action: 'sts:AssumeRole'
       Path: /
       Policies:

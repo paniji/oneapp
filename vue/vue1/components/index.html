@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vue.js Sidebar Example</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.2/css/bulma.min.css">
+  <style>
+    .sidebar {
+      height: 100vh;
+      width: 200px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background-color: #fafafa;
+      box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease-in-out;
+    }
+
+    .sidebar.is-collapsed {
+      width: 60px;
+    }
+
+    .sidebar__item {
+      padding: 10px;
+      transition: all 0.3s ease-in-out;
+    }
+
+    .sidebar__item:hover {
+      background-color: #e6e6e6;
+    }
+
+    .sidebar__item.is-active {
+      background-color: #e6e6e6;
+    }
+
+    .content {
+      margin-left: 200px;
+      padding: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 60px;
+      }
+
+      .sidebar.is-collapsed .sidebar__item span {
+        display: none;
+      }
+
+      .sidebar.is-collapsed .sidebar__item i {
+        font-size: 24px;
+        margin-left: 18px;
+      }
+
+      .content {
+        margin-left: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <nav class="sidebar" :class="{ 'is-collapsed': isCollapsed }">
+      <ul>
+        <li v-for="(item, index) in items" :key="index" class="sidebar__item" :class="{ 'is-active': activeIndex === index }" @click="setActive(index)">
+          <span v-if="!isCollapsed">{{ item.title }}</span>
+          <i v-else class="fas" :class="item.icon"></i>
+        </li>
+      </ul>
+    </nav>
+    <main class="content">
+      <h1>{{ items[activeIndex].title }}</h1>
+      <p>{{ items[activeIndex].content }}</p>
+    </main>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.14/vue.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        isCollapsed: false,
+        activeIndex: 0,
+        items: [
+          {
+            title: 'Dashboard',
+            content: 'This is the content for the Dashboard page.',
+            icon: 'fa-tachometer-alt'
+          },
+          {
+            title: 'Orders',
+            content: 'This is the content for the Orders page.',
+            icon: 'fa-shopping-cart'
+          },
+          {
+            title: 'Products',
+            content: 'This is the content for the Products page.',
+            icon: 'fa-box'
+          },
+        ]
+      },
+      methods: {
+        setActive(index) {
+          this.activeIndex = index
+        }
+      }
+    })
+  </script>
+</body>
+</html>

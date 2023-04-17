@@ -1,3 +1,6 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: OneApp CDK Cookiecutter template
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -36,11 +39,11 @@ Parameters:
   pRuntimeVersion:
     Description: CDK Runtime Version
     Type: String
-    Default: "2.14.0"
+    Default: "2.74.0"
   pRepositoryName:
     Description: CodeCommit repository name
     Type: String
-    Default: pm-
+    Default: pani-
   pMainBranchName:
     Type: String
     Description: Main Branch name
@@ -182,10 +185,10 @@ Resources:
                 - git add .
                 - git commit -m "First CodeBuild Commit"
                 - git push
-          artifacts:
-            files:
-              - '**/*'
-            name: cdk-test-$AWS_REGION
+          # artifacts:
+          #   files:
+          #     - '**/*'
+          #   name: cdk-test-$AWS_REGION
   rAmazonCloudWatchEventRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -345,16 +348,17 @@ Resources:
                 - source .venv/bin/activate
                 - pip3 install -r requirements.txt
                 - cdk ls --context product_name=${pRepositoryName}
+                - rm -rf .venv
                 - cp files/zip_repo.sh .
                 - ls -l zip_repo.sh
                 - chmod +x zip_repo.sh
                 - ./zip_repo.sh
                 - aws s3 cp repository-code.zip s3://${pRepoS3Bucket}/${pRepositoryName}/${pRuntimeVersion}/Prod/ --no-progress
                 - ls
-          artifacts:
-            files:
-              - '**/*'
-            name: cdk-test-$AWS_REGION
+          # artifacts:
+          #   files:
+          #     - '**/*'
+          #   name: cdk-test-$AWS_REGION
 
   rPipelineMain:
     Type: 'AWS::CodePipeline::Pipeline'
@@ -526,16 +530,17 @@ Resources:
                 - source .venv/bin/activate
                 - pip3 install -r requirements.txt
                 - cdk ls --context product_name=${pRepositoryName}
+                - rm -rf .venv 
                 - cp files/zip_repo.sh .
                 - ls -l zip_repo.sh
                 - chmod +x zip_repo.sh
                 - ./zip_repo.sh
                 - aws s3 cp repository-code.zip s3://${pRepoS3Bucket}/${pRepositoryName}/${pRuntimeVersion}/Test/ --no-progress
                 - ls
-          artifacts:
-            files:
-              - '**/*'
-            name: cdk-test-$AWS_REGION
+          # artifacts:
+          #   files:
+          #     - '**/*'
+          #   name: cdk-test-$AWS_REGION
   # Pipeline Test
   rPipelineTest:
     Type: 'AWS::CodePipeline::Pipeline'
