@@ -1,10 +1,10 @@
 ---
 serverless:
   name: test-pani-sa1
-  domain:
-    name: 1ring-dev.pani.one-app.com
-    certificate: arn:aws:acm:us-east-1:454902750279:certificate/37c61fb0-4fd0-465b-9ffa-ae00efeb37a6
-    path: test # new
+  # domain:
+  #   name: 1ring-dev.pani.one-app.com
+  #   certificate: arn:aws:acm:us-east-1:454902750279:certificate/37c61fb0-4fd0-465b-9ffa-ae00efeb37a6
+  #   path: test # new
     #create: False
   apigw:
     name: test-pani-sa
@@ -15,14 +15,14 @@ serverless:
       loggingLevel: OFF
       dataTraceEnabled: False
     endpoint: REGIONAL
-    usagePlan:
-      id: 244qba
-      name: usageEasy
-      # throttle:
-      #   rateLimit: 0
-      #   burstLimit: 0
-    apiKey:
-      name: Apikey1
+    # usagePlan:
+    #   id: 244qba
+    #   name: usageEasy
+    #   # throttle:
+    #   #   rateLimit: 0
+    #   #   burstLimit: 0
+    # apiKey:
+    #   name: Apikey1
   # layers:
   #   sample:
   #     name: sample-layer
@@ -61,7 +61,7 @@ serverless:
     #     GIZMO_VERSION: '0.1'
 
 
-    pani-sample:
+    pani-oneapp:
       handler: index.handler
       # authorizer:
       #   type: REQUEST
@@ -71,18 +71,18 @@ serverless:
       events:
       - http:
           path: oneapp/v1/core
-          method: post
+          method: POST
           integration: AWS
-          request:
-            passThrough: WHEN_NO_TEMPLATES
-            template:
-              application/json: "{\"amznTraceId\" : \"$input.params('X-Amzn-Trace-Id')\",
-                \"requestId\" : \"$context.requestId\", \"authorization\" : \"$input.params('Authorization')\",\r\n
-                \   \"username\": $input.json('$.username'),\r\n    \"mdn\": $input.json('$.mdn'),\r\n
-                \   \"password\": $input.json('$.password'),\r\n    \"name\": $input.json('$.name'),\r\n\t\"clientInfo\"
-                : {\r\n\t\t\"appVersion\" : \"$input.params('x-app-version')\",\r\n\t\t\"appName\"
-                : \"$input.params('x-app-name')\",\r\n\t\t\"os\" : \"$input.params('x-user-agent-os')\",
-                \r\n\t\t\"osVersion\": \"$input.params('x-user-agent-os-version')\"\r\n\t}\r\n}\r\n"
+          # request:
+          #   passThrough: WHEN_NO_TEMPLATES
+          #   template:
+          #     application/json: "{\"amznTraceId\" : \"$input.params('X-Amzn-Trace-Id')\",
+          #       \"requestId\" : \"$context.requestId\", \"authorization\" : \"$input.params('Authorization')\",\r\n
+          #       \   \"username\": $input.json('$.username'),\r\n    \"mdn\": $input.json('$.mdn'),\r\n
+          #       \   \"password\": $input.json('$.password'),\r\n    \"name\": $input.json('$.name'),\r\n\t\"clientInfo\"
+          #       : {\r\n\t\t\"appVersion\" : \"$input.params('x-app-version')\",\r\n\t\t\"appName\"
+          #       : \"$input.params('x-app-name')\",\r\n\t\t\"os\" : \"$input.params('x-user-agent-os')\",
+          #       \r\n\t\t\"osVersion\": \"$input.params('x-user-agent-os-version')\"\r\n\t}\r\n}\r\n"
           private: true
           response:
             headers:
@@ -106,7 +106,7 @@ serverless:
                   "reason" : "$errorMessageObj.reason"}
       package:
         artifact: "sls/lambda/sample"
-      name: sample-app
+      name: pani-oneapp
       memory: 1024
       timeout: 30
       runtime: PYTHON_3_9

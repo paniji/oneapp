@@ -35,9 +35,9 @@ class OneAppStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        bootstrap_lambda_role = ssm_.StringParameter.from_string_parameter_attributes(self, "BootstrapLambdaRole",
-            parameter_name="/bootstrap/oneapp/BootstrapLambdaRoleArn"
-        ).string_value
+        # bootstrap_lambda_role = ssm_.StringParameter.from_string_parameter_attributes(self, "BootstrapLambdaRole",
+        #     parameter_name="/bootstrap/oneapp/BootstrapLambdaRoleArn"
+        # ).string_value
 
         #print("Info: Context: ", self.node.try_get_context("depl_from"))
         project_name = self.node.try_get_context("product_name")
@@ -69,9 +69,11 @@ class OneAppStack(Stack):
         api_name = sl["name"]
         try:
             gw = sl["apigw"]
+            api_name = gw['name']
         except:
             print("no API Gateway")
 
+        #print(gw)
         try:
             stage = gw["stageOptions"]
         except:
@@ -102,35 +104,35 @@ class OneAppStack(Stack):
             print("Error: no domain")
 
         # Usage Plan
-        try:
-            usage = gw["usagePlan"]
-            try:
-                apikey = gw["apiKey"]
-                apikey_bl = True
-            except:
-                apikey_bl = False
-                print("no API Key")
+        # try:
+        #     usage = gw["usagePlan"]
+        #     try:
+        #         apikey = gw["apiKey"]
+        #         apikey_bl = True
+        #     except:
+        #         apikey_bl = False
+        #         print("no API Key")
 
-            if utils.fn_throttle(usage) == True:
-                plan = api_gw.add_usage_plan("UsagePlan",
-                                    name=usage["name"],
-                                    throttle=apigateway_.ThrottleSettings(
-                                        rate_limit=usage["throttle"]["rateLimit"],
-                                        burst_limit=usage["throttle"]["burstLimit"]
-                                    )
-                                )
-            else:
-                plan = api_gw.add_usage_plan("UsagePlan",
-                                    name=usage["name"],
-                                )
-            key = api_gw.add_api_key(apikey["name"])
-            plan.add_api_key(key)
+        #     if utils.fn_throttle(usage) == True:
+        #         plan = api_gw.add_usage_plan("UsagePlan",
+        #                             name=usage["name"],
+        #                             throttle=apigateway_.ThrottleSettings(
+        #                                 rate_limit=usage["throttle"]["rateLimit"],
+        #                                 burst_limit=usage["throttle"]["burstLimit"]
+        #                             )
+        #                         )
+        #     else:
+        #         plan = api_gw.add_usage_plan("UsagePlan",
+        #                             name=usage["name"],
+        #                         )
+        #     key = api_gw.add_api_key(apikey["name"])
+        #     plan.add_api_key(key)
 
-            plan.add_api_stage(
-                        stage=api_gw.deployment_stage
-                        )
-        except:
-            print("no usage plan")
+        #     plan.add_api_stage(
+        #                 stage=api_gw.deployment_stage
+        #                 )
+        # except:
+        #     print("no usage plan")
 
         datex = datetime.datetime.now()
 #        try:
@@ -257,8 +259,9 @@ class OneAppStack(Stack):
                             meth = event["http"]["method"]
 
                             api_gw_entity.add_cors_preflight=apigateway_.CorsOptions(
-                                                            allow_methods=[meth.upper()],
-                                                            allow_origins=apigateway_.Cors.ALL_ORIGINS)
+                                                            #allow_methods=["GET", "PUT", "POST"],
+                                                            allow_origins=apigateway_.Cors.ALL_ORIGINS,
+                                                            allow_headers= ['Content-Type','X-Amz-Date','Authorization','X-Api-Key','X-Amz-Security-Token'])   #apigateway_.Cors.DEFAULT_HEADERS)
 
                             try:
                                 auth_true = event["http"]["authorizer"]
@@ -267,7 +270,7 @@ class OneAppStack(Stack):
                                 meth.upper(), lambda_integration,
                                 #authorizer=auth,
                                 authorization_type=apigateway_.AuthorizationType.IAM,
-                                api_key_required=apikey_bl,
+                                #api_key_required=apikey_bl,
                                 method_responses=[{
                                         'statusCode': '200',
                                         'responseParameters': {
@@ -275,19 +278,21 @@ class OneAppStack(Stack):
                                         }
                                     }]
                                 )
+                                
                             except:
                                 #print("non-auth: ", key)
                                 api_meth = rs_ent.get(rs_path).add_method(
                                     meth.upper(), lambda_integration,
                                     authorization_type=apigateway_.AuthorizationType.IAM,
-                                    api_key_required=apikey_bl,
+                                    #api_key_required=apikey_bl,
                                     method_responses=[{
                                             'statusCode': '200',
                                             'responseParameters': {
                                                 'method.response.header.Access-Control-Allow-Origin': True,
                                             }
                                         }]
-                                    ) 
+                                    )
+
                             role_.attach_inline_policy(_iam.Policy(self, "AllowApiGatewayMethod",
                                 statements=[
                                     _iam.PolicyStatement(
