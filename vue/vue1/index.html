@@ -10,8 +10,23 @@
     <!-- <script src="https://cdn.jsdelivr.net/npm/vue"></script> -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"></script>
     <!-- <script src="components/navbar/navbar.js"></script> -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1360.0.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/aws4@1.12.0/aws4.min.js"></script> -->
 
     <link rel="stylesheet" href="styles/global.css">
+
+    <script type="text/javascript" src="lib/axios/dist/axios.standalone.js"></script>
+    <script type="text/javascript" src="lib/CryptoJS/rollups/hmac-sha256.js"></script>
+    <script type="text/javascript" src="lib/CryptoJS/rollups/sha256.js"></script>
+    <script type="text/javascript" src="lib/CryptoJS/components/hmac.js"></script>
+    <script type="text/javascript" src="lib/CryptoJS/components/enc-base64.js"></script>
+    <script type="text/javascript" src="lib/url-template/url-template.js"></script>
+    <script type="text/javascript" src="lib/apiGatewayCore/sigV4Client.js"></script>
+    <script type="text/javascript" src="lib/apiGatewayCore/apiGatewayClient.js"></script>
+    <script type="text/javascript" src="lib/apiGatewayCore/simpleHttpClient.js"></script>
+    <script type="text/javascript" src="lib/apiGatewayCore/utils.js"></script>
+    <script type="text/javascript" src="apigClient.js"></script>
 
     <script type="importmap">
         {
@@ -24,6 +39,23 @@
 </head>
 
 <body>
+  <script>
+    // Declare a global variable
+    GlobalEndPoint = "https://x6wmwbflgj.execute-api.us-east-1.amazonaws.com/prod/oneapp/v1/core";
+    
+    // // Access the global variable from a function
+    // function myFunction() {
+    //   console.log(myGlobalVar); // Output: This is a global variable
+    // }
+    
+    // // Modify the global variable
+    // function updateGlobalVar() {
+    //   myGlobalVar = "This is an updated global variable";
+    // }
+    // updateGlobalVar();
+    // console.log(myGlobalVar); // Output: This is an updated global variable
+    </script>
+
     <div id="app"></div>
 
     <script type="module">

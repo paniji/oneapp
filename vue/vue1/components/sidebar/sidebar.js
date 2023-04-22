@@ -1,11 +1,13 @@
 import Tabs from '../tabs/tab.js'
 import TreeView from '../treeview/treeview.js' 
+import Button from '../button/button.js' 
 
 export default {
     name: 'Sidebar',
     components: {
         Tabs,
-        TreeView
+        TreeView,
+        Button
     },
     template: `
     <div>
@@ -22,6 +24,7 @@ export default {
       <p>{{ items[activeIndex].content }}</p>
       <TreeView v-if="items[activeIndex].tree" :items="items[activeIndex].tree"></TreeView>
       <Tabs v-if="items[activeIndex].tabs" :tabs="items[activeIndex].tabs"></Tabs>
+      <Button btnClass="button is-primary" label="test"></Button>
     </main>
     </div>
     `,
